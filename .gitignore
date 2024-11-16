@@ -1,0 +1,26 @@
+# Logs
+logs/
+
+# SQLite database
+airflow.db
+*.db
+
+# Virtual environment
+airflow_venv/
+
+# PID file
+airflow-webserver.pid
+*.pid
+
+# Passwords or sensitive information
+standalone_admin_password.txt
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Airflow configuration file
+airflow.cfg
+
+# airflow webserver
+webserver_config.py
