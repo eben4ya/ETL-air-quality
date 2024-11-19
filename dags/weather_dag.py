@@ -96,4 +96,4 @@ with DAG('weather_dag',
     )
     
     
-    is_weather_api_ready >> extract_weather_data
+    is_weather_api_ready >> extract_weather_data >> transform_load_weather_data
