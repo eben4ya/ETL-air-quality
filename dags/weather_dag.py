@@ -2,6 +2,9 @@ from airflow import DAG
 from datetime import datetime, timedelta
 from airflow.providers.http.sensors.http import HttpSensor
 from airflow.providers.http.operators.http import SimpleHttpOperator
+from airflow.operators.python import PythonOperator
+
+import pandas as pd
 import json
 
 default_args = {
@@ -22,6 +25,7 @@ with DAG('weather_dag',
          schedule_interval='@daily',
          catchup=False) as dag:
   
+    # check if weather API is ready
     is_weather_api_ready = HttpSensor(
         task_id='is_weather_api_ready',
         http_conn_id='openweather_api',
@@ -38,6 +42,10 @@ with DAG('weather_dag',
         log_response= True
     )
     
+    # transform weather data
+    transform_load_weather_data = PythonOperator(
+        task_id='transform_load_weather_data',
+    )
     
     
     is_weather_api_ready >> extract_weather_data
