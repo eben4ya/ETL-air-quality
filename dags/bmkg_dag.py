@@ -9,37 +9,63 @@ import json
 # Transform and load BMKG weather data
 def transform_load_bmkg_weather_data(task_instance):
     data = task_instance.xcom_pull(task_ids="extract_bmkg_weather_data")
-    forecast_list = data.get('forecast', [])
-    # transformed_data_list = []
+    if not data or 'data' not in data:
+        raise ValueError("No valid weather data received from the extract task")
+    
+    # real api_data is in index 0 which is a dictionary
+    api_data = data['data'][0]
+    
+    # location is api_data['lokasi']
+    location_data = api_data.get('lokasi', {})
+    
+    # weather is api_data['cuaca']
+    weather_data = api_data.get('cuaca', [])
+    
+    transformed_data_list = []
+    
+    city = location_data.get("desa", "Unknown")
+    kecamatan = location_data.get("kecamatan", "Unknown")
+    province = location_data.get("provinsi", "Unknown")
+    
+    for forecast_group in weather_data:
+        for forecast in forecast_group:
+            # Fetching data from the dictionaries
+            utc_datetime = forecast.get("utc_datetime")
+            local_datetime = forecast.get("local_datetime")
+            temperature = forecast.get("t", None)
+            humidity = forecast.get("hu", None)
+            weather_desc_en = forecast.get("weather_desc_en", "Unknown")
+            weather_desc = forecast.get("weather_desc", "Unknown")
+            weather = forecast.get("weather", None)
+            wind_speed = forecast.get("ws", None)
+            wind_from = forecast.get('wd', 'Unknown')
+            wind_to = forecast.get('wd_to', 'Unknown')
+            cloud_cover = forecast.get("tcc", None)
+            visibility_text = forecast.get("vs_text", None)
+            visibility = forecast.get("vs", None)
+            analysis_date = forecast.get("analysis_date", None)
+            image = forecast.get("image", None)
+            wind_dir_deg = forecast.get("wd_deg", None)
+            dew_point = forecast.get("tp", None)
 
-    # for forecast in forecast_list:
-    #     city = forecast.get("adm4", "Unknown")
-    #     utc_datetime = forecast.get("utc_datetime")
-    #     local_datetime = forecast.get("local_datetime")
-    #     temperature = forecast.get("t", None)
-    #     humidity = forecast.get("hu", None)
-    #     weather_desc = forecast.get("weather_desc", "Unknown")
-    #     wind_speed = forecast.get("ws", None)
-    #     wind_direction = forecast.get("wd", "Unknown")
-    #     cloud_cover = forecast.get("tcc", None)
-    #     visibility = forecast.get("vs_text", None)
-    #     analysis_date = forecast.get("analysis_date", None)
+        transformed_data_list.append({
+            "Province": province,
+            "City": city,
+            "Subdistrict": kecamatan,
+            "UTC Datetime": utc_datetime,
+            "Local Datetime": local_datetime,
+            "Temperature (°C)": temperature,
+            "Humidity (%)": humidity,
+            "Weather Description": weather_desc,
+            "Wind Speed (km/h)": wind_speed,
+            "Wind From": wind_from,
+            "Wind To": wind_to,
+            "Cloud Cover (%)": cloud_cover,
+            "Visibility (km)": visibility,
+            "Analysis Date": analysis_date,
+        })
 
-    #     transformed_data_list.append({
-    #         "City": city,
-    #         "UTC Datetime": utc_datetime,
-    #         "Local Datetime": local_datetime,
-    #         "Temperature (°C)": temperature,
-    #         "Humidity (%)": humidity,
-    #         "Weather Description": weather_desc,
-    #         "Wind Speed (km/h)": wind_speed,
-    #         "Wind Direction": wind_direction,
-    #         "Cloud Cover (%)": cloud_cover,
-    #         "Visibility (km)": visibility,
-    #         "Analysis Date": analysis_date,
-    #     })
-
-    df = pd.DataFrame(forecast_list)
+    df = pd.DataFrame(transformed_data_list)
 
     now = datetime.now()
     dt_string = now.strftime("%d%m%Y%H%M%S")
@@ -50,7 +76,7 @@ default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
     'start_date': datetime(2024, 11, 16),
-    'email': ['dzakiwismadi@gmail.com'],
+    'email': ['dzakiwismadi@gmail.com', 'yitzhaketmanalu@gmail.com'],
     'email_on_failure': True,
     'email_on_retry': True,
     'retries': 2,
