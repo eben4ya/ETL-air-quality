@@ -37,3 +37,7 @@ with DAG('weather_dag',
         response_filter= lambda r: json.loads(r.text),
         log_response= True
     )
+    
+    
+    
+    is_weather_api_ready >> extract_weather_data
