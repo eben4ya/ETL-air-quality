@@ -1,0 +1,56 @@
+'''
+    # Combine Airvisual data (single data per fetch)
+    if airvisual_data:
+        combined_data.append({
+            'City': airvisual_data.get('AV_City'),
+            'State': airvisual_data.get('AV_State'),
+            'Country': airvisual_data.get('AV_Country'),
+            'Longitude': airvisual_data.get('AV_Longitude'),
+            'Latitude': airvisual_data.get('AV_Latitude'),
+            'Pollution Timestamp (UTC)': airvisual_data.get('AV_Pollution Timestamp (UTC)'),
+            'AQI (US)': airvisual_data.get('AV_AQI (US)'),
+            'Main Pollutant (US)': airvisual_data.get('AV_Main Pollutant (US)'),
+            'AQI (CN)': airvisual_data.get('AV_AQI (CN)'),
+            'Main Pollutant (CN)': airvisual_data.get('AV_Main Pollutant (CN)'),
+            'Weather Timestamp (UTC)': airvisual_data.get('AV_Weather Timestamp (UTC)'),
+            'Temperature (°C)': airvisual_data.get('AV_Temperature (°C)'),
+            'Pressure (hPa)': airvisual_data.get('AV_Pressure (hPa)'),
+            'Humidity (%)': airvisual_data.get('AV_Humidity (%)'),
+            'Wind Speed (m/s)': airvisual_data.get('AV_Wind Speed (m/s)'),
+            'Wind Direction (°)': airvisual_data.get('AV_Wind Direction (°)'),
+            'Weather Icon': airvisual_data.get('AV_Weather Icon'),
+        })
+
+    # Combine OpenAQ data (multiple data per fetch)
+    if openaq_data:
+        for sensor in openaq_data:
+            combined_data.append({
+                'Sensor ID': sensor.get('OAQ_Sensor ID'),
+                'Sensor Name': sensor.get('OAQ_Sensor Name'),
+                'Parameter': sensor.get('OAQ_Parameter'),
+                'Units': sensor.get('OAQ_Units'),
+                'Display Name': sensor.get('OAQ_Display Name'),
+                'Location Name': sensor.get('OAQ_Location Name'),
+                'Latitude': sensor.get('OAQ_Latitude'),
+                'Longitude': sensor.get('OAQ_Longitude'),
+                'Date First Recorded (UTC)': sensor.get('OAQ_Date First Recorded (UTC)'),
+                'Date Last Recorded (UTC)': sensor.get('OAQ_Date Last Recorded (UTC)'),
+            })
+
+    # Combine OpenWeather data (single data per fetch)
+    if openweather_data:
+        combined_data.append({
+            'City': openweather_data.get('OW_City'),
+            'Description': openweather_data.get('OW_Description'),
+            'Temperature (C)': openweather_data.get('OW_Temperature (C)'),
+            'Feels Like (C)': openweather_data.get('OW_Feels Like (C)'),
+            'Minimum Temp (C)': openweather_data.get('OW_Minimum Temp (C)'),
+            'Maximum Temp (C)': openweather_data.get('OW_Maximum Temp (C)'),
+            'Pressure': openweather_data.get('OW_Pressure'),
+            'Humidity': openweather_data.get('OW_Humidity'),
+            'Wind Speed': openweather_data.get('OW_Wind Speed'),
+            'Time of Record (WIB)': openweather_data.get('OW_Time of Record (WIB)'),
+            'Sunrise (Local Time WIB)': openweather_data.get('OW_Sunrise (Local Time WIB)'),
+            'Sunset (Local Time WIB)': openweather_data.get('OW_Sunset (Local Time WIB)'),
+        })
+    '''

@@ -10,6 +10,8 @@ import json
 def transform_load_bmkg_weather_data(task_instance):
     data = task_instance.xcom_pull(task_ids="extract_bmkg_weather_data")
     if not data or 'data' not in data:
+        # Push failure status
+        task_instance.xcom_push(key='bmkg_weather_data_status', value='failure')
         raise ValueError("No valid weather data received from the extract task")
     
     # real api_data is in index 0 which is a dictionary
@@ -49,33 +51,32 @@ def transform_load_bmkg_weather_data(task_instance):
             dew_point = forecast.get("tp", None)
 
         transformed_data_list.append({
-            "Province": province,
-            "City": city,
-            "Subdistrict": kecamatan,
-            "UTC Datetime": utc_datetime,
-            "Local Datetime": local_datetime,
-            "Temperature (°C)": temperature,
-            "Humidity (%)": humidity,
-            "Weather Description": weather_desc,
-            "Wind Speed (km/h)": wind_speed,
-            "Wind From": wind_from,
-            "Wind To": wind_to,
-            "Cloud Cover (%)": cloud_cover,
-            "Visibility (km)": visibility,
-            "Analysis Date": analysis_date,
+            "BMKG_Province": province,
+            "BMKG_City": city,
+            "BMKG_Subdistrict": kecamatan,
+            "BMKG_UTC Datetime": utc_datetime,
+            "BMKG_Local Datetime": local_datetime,
+            "BMKG_Temperature (°C)": temperature,
+            "BMKG_Humidity (%)": humidity,
+            "BMKG_Weather Description": weather_desc,
+            "BMKG_Wind Speed (km/h)": wind_speed,
+            "BMKG_Wind From": wind_from,
+            "BMKG_Wind To": wind_to,
+            "BMKG_Cloud Cover (%)": cloud_cover,
+            "BMKG_Visibility (km)": visibility,
+            "BMKG_Analysis Date": analysis_date,
         })
-
-    df = pd.DataFrame(transformed_data_list)
-
-    now = datetime.now()
-    dt_string = now.strftime("%d%m%Y%H%M%S")
-    filename = f"bmkg_weather_data_{dt_string}.csv"
-    df.to_csv(filename, index=False)
+        
+    # Raise error if transformed data is empty
+    if not transformed_data_list:
+        raise ValueError("No valid weather data to transform")
+    
+    task_instance.xcom_push(key='bmkg_weather_data', value=transformed_data_list)
 
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
-    'start_date': datetime(2024, 11, 16),
+    'start_date': datetime(2024, 11, 16),  # Define start_date here
     'email': ['dzakiwismadi@gmail.com', 'yitzhaketmanalu@gmail.com'],
     'email_on_failure': True,
     'email_on_retry': True,
@@ -84,11 +85,15 @@ default_args = {
 }
 
 # Initialize BMKG Weather DAG
-with DAG('bmkg_weather_dag',
-         default_args=default_args,
-         description='A DAG for BMKG weather data',
-         schedule_interval='@daily',
-         catchup=False) as dag:
+with DAG(
+    dag_id='bmkg_weather_dag',
+    default_args=default_args,
+    description='A DAG to extract, transform, and load BMKG weather data',
+    # run every hour
+    schedule_interval='@hourly',
+    catchup=False,  # Do not run for past dates if schedule was missed
+    max_active_runs=1,
+) as dag:
   
     # Check if BMKG API is ready
     is_bmkg_api_ready = HttpSensor(
