@@ -6,19 +6,19 @@ This project aims to collect, process, and analyze air pollution data from vario
 
 ## Features
 
-- Data Collection from Public APIs: Collect air pollution data from APIs like OpenWeather and others.
+- Data Collection from Public APIs: Collect air quality data from Air Visual API and weather data from OpenWeather and BMKG API.
 - ETL Pipeline: Build an Extract, Transform, Load (ETL) process to clean and store data in a data warehouse.
 - Airflow Integration: Automate the data pipeline using Apache Airflow to ensure continuous data ingestion.
-- Data Warehousing: Store the processed data in a cloud data warehouse (e.g., Google BigQuery) for further analysis.
-- Business Intelligence: Use tools like Power BI or Tableau for visualizing trends, comparisons, and generating reports.
+- Data Warehousing: Store the processed data in a cloud data warehouse using PostgreSQL hosted by Aiven for further analysis.
+- Interactive Dashboard: Use Streamlit for visualizing trends, comparisons, and generating reports.
 
 ## Technologies Used
 
 - **Apache Airflow**: For orchestrating the data pipeline.
-- **Google BigQuery**: For data storage and warehousing.
+- **PostgreSQL**: For data storage and warehousing.
 - **Python**: For data extraction, cleaning, and transformations.
-- **Power BI/Tableau**: For data visualization and generating reports.
-- **Docker**: Containerizing the Airflow setup.
+- **Streamlit**: For data visualization and generating reports.
+- **Aiven**: Hosting Database.
 
 ## Project Structure
 
@@ -55,12 +55,13 @@ This project aims to collect, process, and analyze air pollution data from vario
 
 - OpenWeather API
 - BMKG API
-- OpenQA
 - Air Visual
 
 ## Dashboard
 
 The dashboard provides insights such as:
 - Air quality index trends over time
-- Comparison of pollutant levels across different locations
-- Alerts for areas with high pollution levels
+- Air quality Distribution by Weather
+- Main Pollutants by Weather Description
+- Correllation Between Weather Parameters and AQI
+- AQI Predictions
