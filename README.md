@@ -39,17 +39,14 @@ This project aims to collect, process, and analyze air pollution data from vario
    source venv/bin/activate
    pip install -r requirements.txt
    ```
-3. Install Docker and Docker Compose to run Apache Airflow.
-4. Start the Airflow setup:
+3. Start the Airflow setup.
    ```sh
-   docker-compose up
+   airflow standalone
    ```
 
 ## Running the Pipeline
-
-1. Make sure Docker is running.
-2. Access the Airflow web UI at [http://localhost:8080](http://localhost:8080).
-3. Trigger the DAG named `air_pollution_pipeline` to start data collection and processing.
+1. Access the Airflow web UI at [https://waq.izcy.tech/home](https://waq.izcy.tech/home).
+2. Trigger the DAG named `orchestra_dag` to start data collection and processing.
 
 ## Data Sources
 
@@ -60,8 +57,26 @@ This project aims to collect, process, and analyze air pollution data from vario
 ## Dashboard
 
 The dashboard provides insights such as:
-- Air quality index trends over time
 - Air quality Distribution by Weather
 - Main Pollutants by Weather Description
 - Correllation Between Weather Parameters and AQI
 - AQI Predictions
+
+## References
+
+- Project Repository: [GitHub - ETL Streamlit](https://github.com/eben4ya/ETL-Streamlit)
+- **APIs Used**:
+  - [AirVisual API](https://api-docs.iqair.com/)
+  - [OpenWeather API](https://openweathermap.org/api)
+  - [BMKG API](https://data.bmkg.go.id/)
+
+
+## Member
+
+1. Benaya Imanuela (22/494790/TK/54313)
+2. Muhammad Hilmi Dzaki Wismadi (22/497591/TK/54539)
+3. Yitzhak Edmund Tio Manalu (22/499769/TK/54763)
+
+## Link
+1. Blog Post at [Notion](https://lying-shrine-78d.notion.site/Polusi-Udara-Data-Engineering-1350238f73218085a93dcf8ca0873e4c?pvs=4).
+2. Demo Video at [Gdrive](https://drive.google.com/file/d/10bC4HO3JJMpiwpzxx9j9LijChUc5d593/view?usp=sharing)
