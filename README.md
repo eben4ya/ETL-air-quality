@@ -55,12 +55,13 @@ This project aims to collect, process, and analyze air pollution data from vario
 
 - OpenWeather API
 - BMKG API
-- OpenQA
 - Air Visual
 
 ## Dashboard
 
 The dashboard provides insights such as:
 - Air quality index trends over time
-- Comparison of pollutant levels across different locations
-- Alerts for areas with high pollution levels
+- Air quality Distribution by Weather
+- Main Pollutants by Weather Description
+- Correllation Between Weather Parameters and AQI
+- AQI Predictions
