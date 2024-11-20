@@ -21,7 +21,11 @@ import json
 # Third-party Libraries
 import pandas as pd
 
-def transform_load_airvisual_data(task_instance):
+# Postgres connection
+from airflow.providers.postgres.operators.postgres import PostgresOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+
+def transform_load_airvisual_data(task_instance: TaskInstance):
     data = task_instance.xcom_pull(task_ids="extract_airvisual_data")
 
     if data.get("status") != "success":
@@ -64,7 +68,7 @@ def transform_load_airvisual_data(task_instance):
     task_instance.xcom_push(key='airvisual_data', value=transformed_data)
 
 # Transform and load BMKG weather data
-def transform_load_bmkg_weather_data(task_instance):
+def transform_load_bmkg_weather_data(task_instance: TaskInstance):
     data = task_instance.xcom_pull(task_ids="extract_bmkg_weather_data")
     if not data or 'data' not in data:
         # Push failure status
@@ -131,38 +135,13 @@ def transform_load_bmkg_weather_data(task_instance):
     # Push transformed data to XCom for later tasks
     task_instance.xcom_push(key='bmkg_weather_data', value=transformed_data_list)
 
-# Transform and save OpenAQ data
-def transform_load_openaq_data(task_instance):
-    data = task_instance.xcom_pull(task_ids="extract_openaq_data")
-    results = data['results'][0]  # Extract the first (and only) result
-
-    sensors = results['sensors']
-    transformed_data = []
-
-    for sensor in sensors:
-        transformed_data.append({
-            "OAQ_Sensor ID": sensor['id'],
-            "OAQ_Sensor Name": sensor['name'],
-            "OAQ_Parameter": sensor['parameter']['name'],
-            "OAQ_Units": sensor['parameter']['units'],
-            "OAQ_Display Name": sensor['parameter']['displayName'],
-            "OAQ_Location Name": results['name'],
-            "OAQ_Latitude": results['coordinates']['latitude'],
-            "OAQ_Longitude": results['coordinates']['longitude'],
-            "OAQ_Date First Recorded (UTC)": results['datetimeFirst']['utc'],
-            "OAQ_Date Last Recorded (UTC)": results['datetimeLast']['utc']
-        })
-        
-    # Push transformed data to XCom for later tasks
-    task_instance.xcom_push(key='openaq_data', value=transformed_data)
-
 # Convert kelvin to celcius
 def kelvin_to_celsius(temp_in_kelvin):
     temp_in_celsius = temp_in_kelvin - 273.15
     return temp_in_celsius
 
 # transform and load data
-def transform_load_weather_data(task_instance):
+def transform_load_weather_data(task_instance: TaskInstance):
     data = task_instance.xcom_pull(task_ids="extract_weather_data")
     city = data["name"]
     weather_description = data["weather"][0]['description']
@@ -174,8 +153,7 @@ def transform_load_weather_data(task_instance):
     humidity = data["main"]["humidity"]
     wind_speed = data["wind"]["speed"]
     
-    # Adjusting the time to WIB (UTC+7)
-    timezone_offset = timedelta(seconds=data['timezone'] + 25200)  # WIB offset is UTC+7 (25200 seconds)
+    timezone_offset = timedelta(seconds=data['timezone']) 
     time_of_record = datetime.utcfromtimestamp(data['dt']) + timezone_offset
     sunrise_time = datetime.utcfromtimestamp(data['sys']['sunrise']) + timezone_offset
     sunset_time = datetime.utcfromtimestamp(data['sys']['sunset']) + timezone_offset
@@ -203,7 +181,6 @@ def combine_and_save_csv(task_instance: TaskInstance):
     # Pull data from XComs by key
     bmkg_weather_data = task_instance.xcom_pull(task_ids='transform_load_bmkg_weather_data', key='bmkg_weather_data')
     airvisual_data = task_instance.xcom_pull(task_ids='transform_load_airvisual_data', key='airvisual_data')
-    openaq_data = task_instance.xcom_pull(task_ids='transform_load_openaq_data', key='openaq_data')
     openweather_data = task_instance.xcom_pull(task_ids='transform_load_weather_data', key='weather_data')
 
     # Initialize a list to hold combined data
@@ -211,89 +188,116 @@ def combine_and_save_csv(task_instance: TaskInstance):
 
     # Combine BMKG data (multiple data per fetch)
     if bmkg_weather_data:
-        for data in bmkg_weather_data:
-            combined_data.append({
-                'Province': data.get('BMKG_Province'),
-                'City': data.get('BMKG_City'),
-                'Subdistrict': data.get('BMKG_Subdistrict'),
-                'UTC Datetime': data.get('BMKG_UTC Datetime'),
-                'Local Datetime': data.get('BMKG_Local Datetime'),
-                'Temperature (°C)': data.get('BMKG_Temperature (°C)'),
-                'Humidity (%)': data.get('BMKG_Humidity (%)'),
-                'Weather Description': data.get('BMKG_Weather Description'),
-                'Wind Speed (km/h)': data.get('BMKG_Wind Speed (km/h)'),
-                'Wind From': data.get('BMKG_Wind From'),
-                'Wind To': data.get('BMKG_Wind To'),
-                'Cloud Cover (%)': data.get('BMKG_Cloud Cover (%)'),
-                'Visibility (km)': data.get('BMKG_Visibility (km)'),
-                'Analysis Date': data.get('BMKG_Analysis Date'),
-            })
+        data = bmkg_weather_data[0]
+        combined_data.append({
+            'Predicted Temperature (°C)': data.get('BMKG_Temperature (°C)'),
+            'Predicted Humidity (%)': data.get('BMKG_Humidity (%)'),
+            'Predicted Time of Record (WIB)': data.get('BMKG_Local Datetime'),
+            'Predicted Wind Speed (km/h)': data.get('BMKG_Wind Speed (km/h)'),
+            'Predicted Weather Description': data.get('BMKG_Weather Description'),
+            # 'Analysis Date': data.get('BMKG_Analysis Date'),
+            # 'Cloud Cover (%)': data.get('BMKG_Cloud Cover (%)'),
+            # 'Province': data.get('BMKG_Province'),
+            # 'City': data.get('BMKG_City'),
+            # 'Subdistrict': data.get('BMKG_Subdistrict'),
+            # 'UTC Datetime': data.get('BMKG_UTC Datetime'),
+            # 'Wind From': data.get('BMKG_Wind From'),
+            # 'Wind To': data.get('BMKG_Wind To'),
+            # 'Visibility (km)': data.get('BMKG_Visibility (km)'),
+        })
+        
+        # convert km/h to m/s
+        combined_data[0]['Predicted Wind Speed (m/s)'] = combined_data[0]['Predicted Wind Speed (km/h)'] / 3.6
+        
+        # Delete the original wind speed in km/h
+        del combined_data[0]['Predicted Wind Speed (km/h)']
+        
     else:
         raise ValueError("BMKG data is empty or missing 'results' field.")
 
-    # Combine Airvisual data (single data per fetch)
-    if airvisual_data:
-        combined_data.append({
-            'City': airvisual_data.get('AV_City'),
-            'State': airvisual_data.get('AV_State'),
-            'Country': airvisual_data.get('AV_Country'),
-            'Longitude': airvisual_data.get('AV_Longitude'),
-            'Latitude': airvisual_data.get('AV_Latitude'),
-            'Pollution Timestamp (UTC)': airvisual_data.get('AV_Pollution Timestamp (UTC)'),
-            'AQI (US)': airvisual_data.get('AV_AQI (US)'),
-            'Main Pollutant (US)': airvisual_data.get('AV_Main Pollutant (US)'),
-            'AQI (CN)': airvisual_data.get('AV_AQI (CN)'),
-            'Main Pollutant (CN)': airvisual_data.get('AV_Main Pollutant (CN)'),
-            'Weather Timestamp (UTC)': airvisual_data.get('AV_Weather Timestamp (UTC)'),
-            'Temperature (°C)': airvisual_data.get('AV_Temperature (°C)'),
-            'Pressure (hPa)': airvisual_data.get('AV_Pressure (hPa)'),
-            'Humidity (%)': airvisual_data.get('AV_Humidity (%)'),
-            'Wind Speed (m/s)': airvisual_data.get('AV_Wind Speed (m/s)'),
-            'Wind Direction (°)': airvisual_data.get('AV_Wind Direction (°)'),
-            'Weather Icon': airvisual_data.get('AV_Weather Icon'),
-        })
-    else:
-        raise ValueError("Airvisual data is empty or missing 'results' field.")
-
-    # Combine OpenAQ data (multiple data per fetch)
-    if openaq_data:
-        for sensor in openaq_data:
-            combined_data.append({
-                'Sensor ID': sensor.get('OAQ_Sensor ID'),
-                'Sensor Name': sensor.get('OAQ_Sensor Name'),
-                'Parameter': sensor.get('OAQ_Parameter'),
-                'Units': sensor.get('OAQ_Units'),
-                'Display Name': sensor.get('OAQ_Display Name'),
-                'Location Name': sensor.get('OAQ_Location Name'),
-                'Latitude': sensor.get('OAQ_Latitude'),
-                'Longitude': sensor.get('OAQ_Longitude'),
-                'Date First Recorded (UTC)': sensor.get('OAQ_Date First Recorded (UTC)'),
-                'Date Last Recorded (UTC)': sensor.get('OAQ_Date Last Recorded (UTC)'),
-            })
-    else:
-        raise ValueError("OpenAQ data is empty or missing 'results' field.")
 
     # Combine OpenWeather data (single data per fetch)
     if openweather_data:
         combined_data.append({
-            'City': openweather_data.get('OW_City'),
-            'Description': openweather_data.get('OW_Description'),
-            'Temperature (C)': openweather_data.get('OW_Temperature (C)'),
-            'Feels Like (C)': openweather_data.get('OW_Feels Like (C)'),
-            'Minimum Temp (C)': openweather_data.get('OW_Minimum Temp (C)'),
-            'Maximum Temp (C)': openweather_data.get('OW_Maximum Temp (C)'),
-            'Pressure': openweather_data.get('OW_Pressure'),
-            'Humidity': openweather_data.get('OW_Humidity'),
-            'Wind Speed': openweather_data.get('OW_Wind Speed'),
+            'Temperature (°C)': airvisual_data.get('AV_Temperature (°C)'),
+            'Humidity (%)': airvisual_data.get('AV_Humidity (%)'),
+            'Pressure (hPa)': airvisual_data.get('AV_Pressure (hPa)'),
             'Time of Record (WIB)': openweather_data.get('OW_Time of Record (WIB)'),
-            'Sunrise (Local Time WIB)': openweather_data.get('OW_Sunrise (Local Time WIB)'),
-            'Sunset (Local Time WIB)': openweather_data.get('OW_Sunset (Local Time WIB)'),
+            'Wind Speed (m/s)': openweather_data.get('OW_Wind Speed'),
+            'Weather Description': openweather_data.get('OW_Description'),
+            # 'City': openweather_data.get('OW_City'),
+            # 'Feels Like (C)': openweather_data.get('OW_Feels Like (C)'),
+            # 'Minimum Temp (C)': openweather_data.get('OW_Minimum Temp (C)'),
+            # 'Maximum Temp (C)': openweather_data.get('OW_Maximum Temp (C)'),
+            # 'Sunrise (Local Time WIB)': openweather_data.get('OW_Sunrise (Local Time WIB)'),
+            # 'Sunset (Local Time WIB)': openweather_data.get('OW_Sunset (Local Time WIB)'),
         })
     else:
         raise ValueError("OpenWeather data is empty or missing 'results' field.")
     
-    # Create DataFrame from combined data
-    df_combined = pd.DataFrame(combined_data)
+    # Combine Airvisual data (single data per fetch)
+    if airvisual_data:
+        temp_av_data = {
+            'Temperature (°C)': airvisual_data.get('AV_Temperature (°C)'),
+            'Humidity (%)': airvisual_data.get('AV_Humidity (%)'),
+            'Pressure (hPa)': airvisual_data.get('AV_Pressure (hPa)'),
+            'AQI (CN)': airvisual_data.get('AV_AQI (CN)'),
+            'Main Pollutant (CN)': airvisual_data.get('AV_Main Pollutant (CN)'),
+            'Weather Timestamp (UTC)': airvisual_data.get('AV_Weather Timestamp (UTC)'),
+            # 'Pollution Timestamp (UTC)': airvisual_data.get('AV_Pollution Timestamp (UTC)'),
+            # 'AQI (US)': airvisual_data.get('AV_AQI (US)'),
+            # 'Main Pollutant (US)': airvisual_data.get('AV_Main Pollutant (US)'),
+            # 'City': airvisual_data.get('AV_City'),
+            # 'State': airvisual_data.get('AV_State'),
+            # 'Country': airvisual_data.get('AV_Country'),
+            # 'Longitude': airvisual_data.get('AV_Longitude'),
+            # 'Latitude': airvisual_data.get('AV_Latitude'),
+            # 'Wind Speed (m/s)': airvisual_data.get('AV_Wind Speed (m/s)'),
+            # 'Wind Direction (°)': airvisual_data.get('AV_Wind Direction (°)'),
+            # 'Weather Icon': airvisual_data.get('AV_Weather Icon'),
+        }
+        
+        # convert Pollution Timestamp (UTC) and Weather Timestamp (UTC) to WIB
+        timezone_offset = timedelta(hours=7)  # WIB offset is UTC+7
+        
+        # Remove the 'Z' and then convert to datetime
+        # pollution_timestamp_utc = temp_av_data['Pollution Timestamp (UTC)'].rstrip('Z')
+        weather_timestamp_utc = temp_av_data['Weather Timestamp (UTC)'].rstrip('Z')
+
+        # Convert to WIB by adding the timezone offset
+        # temp_av_data['Time of Record (WIB) (Pollution)'] = datetime.fromisoformat(pollution_timestamp_utc) + timezone_offset
+        temp_av_data['Time of Record (WIB)'] = datetime.fromisoformat(weather_timestamp_utc) + timezone_offset
+        
+        # Remove the original UTC timestamps
+        # del temp_av_data['Pollution Timestamp (UTC)']
+        del temp_av_data['Weather Timestamp (UTC)']
+        
+        combined_data.append(temp_av_data)
+    else:
+        raise ValueError("Airvisual data is empty or missing 'results' field.")
+    
+    # Average the temperature, humidity, and pressure of airvisual and openweather
+    merged_av_with_openweather = {
+        'Time of Record (WIB)': combined_data[1].get('Time of Record (WIB)'),
+        'Temperature (°C)': (combined_data[1].get('Temperature (°C)') + combined_data[2].get('Temperature (°C)')) / 2,
+        'Humidity (%)': (combined_data[1].get('Humidity (%)') + combined_data[2].get('Humidity (%)')) / 2,
+        'Pressure': (combined_data[1].get('Pressure (hPa)') + combined_data[2].get('Pressure (hPa)')) / 2,
+        'Wind Speed (m/s)': combined_data[1].get('Wind Speed (m/s)'),
+        'Weather Description': combined_data[1].get('Weather Description'),
+        'AQI (CN)': combined_data[2].get('AQI (CN)'),
+        'Main Pollutant (CN)': combined_data[2].get('Main Pollutant (CN)'),
+    }
+    
+    # merge merged_av_with_openweather with combined_data[0]
+    merged_av_with_openweather.update(combined_data[0])
+    
+    # Create DataFrame from combined data[0] and merged_av_with_openweather
+    df_combined = pd.DataFrame(
+        [merged_av_with_openweather]
+    )
+    
+    # truncate float to 2 decimal
+    df_combined = df_combined.round(2)
 
     # Generate the file name with timestamp
     now = datetime.now()
@@ -304,7 +308,53 @@ def combine_and_save_csv(task_instance: TaskInstance):
     file_path = f"{output_dir}{filename}"
 
     # Save the combined data to CSV
-    df_combined.to_csv(file_path, index=False)
+    # df_combined.to_csv(file_path, index=False)
+    
+    # File of list of dictionary to be saved to XCom
+    combined_data = df_combined.to_dict(orient='records')
+    
+    # Convert any Timestamp objects to ISO 8601 strings
+    for row in combined_data:
+        for key, value in row.items():
+            if isinstance(value, pd.Timestamp):
+                row[key] = value.isoformat()  # Converts to string like '2024-11-20T13:00:00'
+
+    # Push the cleaned data to XCom
+    task_instance.xcom_push(key='combined_weather_data_file', value=combined_data)
+
+def save_combined_data_fn(task_instance: TaskInstance):
+    # Pull data from XComs by key
+    combined_data = task_instance.xcom_pull(task_ids='combine_and_save_csv', key='combined_weather_data_file')
+    
+    # Connect to PostgreSQL and insert data (example)
+    # Assuming you have already set up your connection
+    postgres_hook = PostgresHook(postgres_conn_id='postgres_conn')
+    query ='''
+    INSERT INTO weather_pollution_predictions (
+        time_of_record_wib, 
+        temperature_c, 
+        humidity_percent, 
+        pressure_hpa, 
+        wind_speed_ms, 
+        weather_description, 
+        aqi_cn, 
+        main_pollutant_cn)
+    VALUES (
+        %s, %s, %s, %s, %s, %s, %s, %s
+    )
+    '''
+    
+    for row in combined_data:
+        postgres_hook.run(query, parameters=(
+            row['Time of Record (WIB)'], 
+            row['Temperature (°C)'], 
+            row['Humidity (%)'], 
+            row['Pressure'], 
+            row['Wind Speed (m/s)'], 
+            row['Weather Description'], 
+            row['AQI (CN)'], 
+            row['Main Pollutant (CN)'], 
+        ))
 
 # DAG Default arguments
 default_args = {
@@ -316,7 +366,8 @@ default_args = {
 with DAG(
     dag_id='orchestra_dag',
     default_args=default_args,
-    schedule_interval='*/30 * * * *',
+    # schedule every 5 minutes
+    schedule_interval='*/5 * * * *',
     catchup=False,
 ) as orchestra_dag:
 
@@ -334,20 +385,10 @@ with DAG(
     is_bmkg_api_ready = HttpSensor(
         task_id='is_bmkg_api_ready',
         http_conn_id='weather_bmkg',
-        endpoint='/publik/prakiraan-cuaca?adm4=34.04.11.2004',
+        endpoint='/publik/prakiraan-cuaca?adm4=34.04.06.2001',
         poke_interval=60,  # Check every minute
         timeout=600,  # Timeout after 10 minutes
         mode='poke',
-    )
-    
-    # Task to check if data is ready
-    is_ready_openaq_data = HttpSensor(
-        task_id='is_ready_openaq_data',
-        http_conn_id='openAQ',
-        endpoint='/v3/locations/3037147',
-        headers={
-            'X-API-Key': '3abcfd7f19217d02d084277877b2bf2a14dd85d359a7a9960505013c703a62d3'
-        },
     )
     
     # check if weather API is ready
@@ -371,23 +412,10 @@ with DAG(
     extract_bmkg_weather_data = SimpleHttpOperator(
         task_id='extract_bmkg_weather_data',
         http_conn_id='weather_bmkg',
-        endpoint='/publik/prakiraan-cuaca?adm4=34.04.11.2004',
+        endpoint='/publik/prakiraan-cuaca?adm4=34.04.06.2001',
         method='GET',
         response_filter=lambda r: json.loads(r.text),
         log_response=True,
-    )
-    
-    # Task to extract data from OpenAQ API
-    extract_openaq_data = SimpleHttpOperator(
-        task_id='extract_openaq_data',
-        http_conn_id='openAQ',
-        endpoint='/v3/locations/3037147',
-        method='GET',
-        headers={
-            'X-API-Key': '3abcfd7f19217d02d084277877b2bf2a14dd85d359a7a9960505013c703a62d3'
-        },
-        response_filter=lambda response: json.loads(response.text),
-        log_response=True
     )
     
     # extract open weather data
@@ -412,12 +440,6 @@ with DAG(
         python_callable=transform_load_bmkg_weather_data,
         provide_context=True,
     )
-
-    # Task to transform and load the data
-    transform_load_openaq_data = PythonOperator(
-        task_id='transform_load_openaq_data',
-        python_callable=transform_load_openaq_data
-    )
     
     # transform weather data
     transform_load_weather_data = PythonOperator(
@@ -430,10 +452,17 @@ with DAG(
         task_id='combine_and_save_csv',
         python_callable=combine_and_save_csv,
     )
+    
+    # Postgres Operator to save the combined data
+    save_combined_data_task = PythonOperator(
+        task_id='save_combined_data',
+        python_callable=save_combined_data_fn,
+        provide_context=True,
+    )
 
     # Define dependencies
-    start_task >> [is_airvisual_api_ready, is_bmkg_api_ready, is_ready_openaq_data, is_weather_api_ready]
+    start_task >> [is_airvisual_api_ready, is_bmkg_api_ready, is_weather_api_ready]
     is_airvisual_api_ready >> extract_airvisual_data >> transform_load_airvisual_data >> combine_and_save_csv_task
     is_bmkg_api_ready >> extract_bmkg_weather_data >> transform_load_bmkg_weather_data >> combine_and_save_csv_task
-    is_ready_openaq_data >> extract_openaq_data >> transform_load_openaq_data >> combine_and_save_csv_task
     is_weather_api_ready >> extract_weather_data >> transform_load_weather_data >> combine_and_save_csv_task
+    combine_and_save_csv_task >> save_combined_data_task

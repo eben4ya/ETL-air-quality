@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from airflow.providers.http.sensors.http import HttpSensor
 from airflow.providers.http.operators.http import SimpleHttpOperator
 from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 import pandas as pd
 import json
 
@@ -73,6 +74,32 @@ def transform_load_bmkg_weather_data(task_instance):
     
     task_instance.xcom_push(key='bmkg_weather_data', value=transformed_data_list)
 
+    # Upload selected column to Postgres
+    postgres_hook = PostgresHook(postgres_conn_id='postgres_conn')
+    query_bmkg ='''
+    INSERT INTO BMKG_predictions (
+        predicted_temperature_c, 
+        predicted_humidity_percent, 
+        predicted_time_of_record_wib, 
+        predicted_weather_description, 
+        predicted_wind_speed_ms)
+    VALUES (
+        %s, %s, %s, %s, %s
+    )
+    '''
+    
+    for data in transformed_data_list:
+        postgres_hook.run(
+            query_bmkg,
+            parameters=(
+                data["BMKG_Temperature (°C)"],
+                data["BMKG_Humidity (%)"],
+                data["BMKG_Local Datetime"],
+                data["BMKG_Weather Description"],
+                data["BMKG_Wind Speed (km/h)"]
+            )
+        )
+
 default_args = {
     'owner': 'airflow',
     'depends_on_past': False,
@@ -89,8 +116,8 @@ with DAG(
     dag_id='bmkg_weather_dag',
     default_args=default_args,
     description='A DAG to extract, transform, and load BMKG weather data',
-    # run every hour
-    schedule_interval='@hourly',
+    # run every day
+    schedule_interval='0 0 * * *',
     catchup=False,  # Do not run for past dates if schedule was missed
     max_active_runs=1,
 ) as dag:
